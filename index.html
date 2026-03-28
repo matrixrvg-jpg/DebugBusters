@@ -29,8 +29,7 @@
                     </div>
                     <div>
                         <label class="block text-sm text-gray-400 mb-1">Appliance</label>
-                        <select id="applianceName" onchange="updateDefaultHours()" class="w-full bg-gray-700 text-white rounded p-2 outline-none">
-                        </select>
+                        <select id="applianceName" onchange="updateDefaultHours()" class="w-full bg-gray-700 text-white rounded p-2 outline-none"></select>
                     </div>
                     <div>
                         <label class="block text-sm text-gray-400 mb-1">Active Hours / Day</label>
@@ -51,7 +50,7 @@
                     <label class="block text-sm text-gray-400 mb-1">Global Electricity Rate (₹/kWh)</label>
                     <input type="number" id="rate" value="8" class="w-full bg-gray-700 text-white rounded p-2 outline-none">
                 </div>
-                <button onclick="runAudit()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded transition-colors mt-4">
+                <button id="auditBtn" onclick="runAudit()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded transition-colors mt-4">
                     Run Full Audit
                 </button>
             </div>
@@ -104,7 +103,7 @@
                         <p class="text-sm text-gray-400">Select an appliance to see the impact of unplugging it.</p>
                         <select id="simSelect" class="mt-2 bg-gray-700 text-white rounded p-1 text-sm outline-none w-48"></select>
                     </div>
-                    <button onclick="runSimulation()" class="bg-blue-500/20 text-blue-400 hover:bg-blue-500/40 px-4 py-2 rounded font-semibold transition-colors">
+                    <button id="simBtn" onclick="runSimulation()" class="bg-blue-500/20 text-blue-400 hover:bg-blue-500/40 px-4 py-2 rounded font-semibold transition-colors">
                         Simulate
                     </button>
                 </div>
@@ -121,25 +120,17 @@
         };
 
         const defaultHoursMap = {
-            "Smart TV": 4,
-            "Set-Top Box": 4,
-            "Gaming Console": 2,
-            "Desktop Monitor": 6,
-            "Phone Charger": 2,
-            "Old Refrigerator": 24,
-            "Microwave": 0.5,
-            "Incandescent Bulb (60W)": 5
+            "Smart TV": 4, "Set-Top Box": 4, "Gaming Console": 2, "Desktop Monitor": 6,
+            "Phone Charger": 2, "Old Refrigerator": 24, "Microwave": 0.5, "Incandescent Bulb (60W)": 5
         };
 
         function updateApplianceDropdown() {
             const room = document.getElementById('room').value;
             const applianceSelect = document.getElementById('applianceName');
             applianceSelect.innerHTML = '';
-            const appliances = catalogMap[room] || [];
-            appliances.forEach(app => {
+            (catalogMap[room] || []).forEach(app => {
                 const option = document.createElement('option');
-                option.value = app;
-                option.text = app;
+                option.value = app; option.text = app;
                 applianceSelect.appendChild(option);
             });
             updateDefaultHours();
@@ -148,9 +139,7 @@
         function updateDefaultHours() {
             const appliance = document.getElementById('applianceName').value;
             const hoursInput = document.getElementById('activeHours');
-            if (defaultHoursMap[appliance] !== undefined) {
-                hoursInput.value = defaultHoursMap[appliance];
-            }
+            if (defaultHoursMap[appliance] !== undefined) hoursInput.value = defaultHoursMap[appliance];
         }
 
         document.addEventListener('DOMContentLoaded', updateApplianceDropdown);
@@ -163,29 +152,22 @@
             const hours = parseFloat(document.getElementById('activeHours').value);
             const standby = document.getElementById('standbyToggle').checked;
             
-            const device = {
-                id: Date.now().toString(),
-                room: room,
-                name: name,
-                is_custom: false,
-                active_hours_per_day: hours,
-                stays_on_standby: standby
-            };
-            
+            const device = { id: Date.now().toString(), room, name, is_custom: false, active_hours_per_day: hours, stays_on_standby: standby };
             myInventory.push(device);
             
             const simSelect = document.getElementById('simSelect');
             const option = document.createElement('option');
-            option.value = device.id;
-            option.text = `${name} (${room})`;
+            option.value = device.id; option.text = `${name} (${room})`;
             simSelect.appendChild(option);
             
             document.getElementById('val-count').innerText = myInventory.length;
         }
 
-        // FIX 1: Using relative URL and handling potential errors
         async function runAudit() {
             if(myInventory.length === 0) return alert("Please add appliances to your inventory.");
+            const btn = document.getElementById('auditBtn');
+            const originalText = btn.innerText;
+            btn.innerText = "Processing...";
             
             const rate = parseFloat(document.getElementById('rate').value);
             
@@ -196,13 +178,11 @@
                     body: JSON.stringify({ rate_per_kwh: rate, appliances: myInventory })
                 });
                 
-                if (!response.ok) throw new Error("Backend Audit Failed");
-                
+                if (!response.ok) throw new Error();
                 const data = await response.json();
                 
                 document.getElementById('val-cost').innerText = `₹${data.summary.yearly_cost}`;
                 document.getElementById('val-co2').innerText = `${data.summary.yearly_co2} kg`;
-                
                 const totalPhantom = data.all_data.reduce((sum, item) => sum + item.phantom_waste, 0);
                 document.getElementById('val-phantom').innerText = `₹${totalPhantom.toFixed(2)}`;
 
@@ -211,64 +191,47 @@
                 data.top_offenders.forEach((o, index) => {
                     offList.innerHTML += `
                         <div class="bg-gray-700 p-3 rounded flex justify-between items-center border-l-4 ${index === 0 ? 'border-red-500' : 'border-orange-400'}">
-                            <div>
-                                <p class="font-semibold text-gray-200 text-sm">${o.name}</p>
-                                <p class="text-xs text-gray-400">${o.room}</p>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-red-400 text-sm font-bold">Waste Score: ${o.waste_score}</p>
-                                <p class="text-xs text-gray-400">₹${o.yearly_cost}/yr</p>
-                            </div>
-                        </div>
-                    `;
+                            <div><p class="font-semibold text-gray-200 text-sm">${o.name}</p><p class="text-xs text-gray-400">${o.room}</p></div>
+                            <div class="text-right"><p class="text-red-400 text-sm font-bold">Waste Score: ${o.waste_score}</p><p class="text-xs text-gray-400">₹${o.yearly_cost}/yr</p></div>
+                        </div>`;
                 });
 
                 const swapList = document.getElementById('swapsList');
-                swapList.innerHTML = '';
-                if(data.recommendations.length === 0) {
-                    swapList.innerHTML = '<p class="text-sm text-gray-500 italic">Your inventory looks highly efficient!</p>';
-                } else {
-                    data.recommendations.forEach(r => {
-                        swapList.innerHTML += `
-                            <div class="bg-gray-700 p-3 rounded border-l-4 border-emerald-500">
-                                <p class="text-sm text-gray-200">${r.message}</p>
-                                <p class="text-xs text-gray-400 mt-1">${r.room} • ${r.appliance}</p>
-                            </div>
-                        `;
-                    });
-                }
+                swapList.innerHTML = data.recommendations.length === 0 ? '<p class="text-sm text-gray-500 italic">Highly efficient!</p>' : '';
+                data.recommendations.forEach(r => {
+                    swapList.innerHTML += `<div class="bg-gray-700 p-3 rounded border-l-4 border-emerald-500"><p class="text-sm text-gray-200">${r.message}</p></div>`;
+                });
             } catch (err) {
-                alert("Audit Error: Check if your Render backend is still active.");
+                alert("Audit Error: Check Render Logs. Ensure main.py is running.");
+            } finally {
+                btn.innerText = originalText;
             }
         }
 
-        // FIX 2: Matching the Backend's expected query parameter format
         async function runSimulation() {
             const id = document.getElementById('simSelect').value;
-            if(!id) return alert("Select an appliance to simulate.");
+            if(!id) return alert("Select a device.");
+            const btn = document.getElementById('simBtn');
+            btn.innerText = "...";
             
             const device = myInventory.find(d => d.id === id);
             const rate = parseFloat(document.getElementById('rate').value);
 
             try {
-                // We pass rate_per_kwh as a query string to match the FastAPI @app.post line
+                // FIXED: Using Backticks (`) for template literals so ${rate} works!
                 const response = await fetch(`/api/simulate?rate_per_kwh=${rate}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(device)
                 });
                 
-                if (!response.ok) throw new Error("Simulation Failed");
-
-                const result = await response.json();
-                
-                if(result.savings_rs > 0) {
-                    alert(`${result.scenario}\n\nYou would save:\n₹${result.savings_rs} per year\n${result.savings_co2} kg of CO2 per year`);
-                } else {
-                    alert("Unplugging this device doesn't yield significant savings because it has no standby draw.");
-                }
+                if (!response.ok) throw new Error();
+                const res = await response.json();
+                alert(`${res.scenario}\n\nSavings: ₹${res.savings_rs}/yr | ${res.savings_co2}kg CO2`);
             } catch (err) {
-                alert("Simulation Error: Try running the full audit first.");
+                alert("Simulation Failed.");
+            } finally {
+                btn.innerText = "Simulate";
             }
         }
     </script>
