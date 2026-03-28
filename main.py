@@ -1,5 +1,4 @@
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
@@ -126,10 +125,15 @@ def run_what_if(req: UserAppliance, rate_per_kwh: float):
     }
 
 # --- THE FIX ---
-# This route handles your index.html sitting in the root directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 @app.get("/")
 async def read_index():
-    return FileResponse('index.html')
+    index_path = os.path.join(BASE_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    # If the file is missing, this tells you why in the browser
+    raise HTTPException(status_code=404, detail=f"index.html not found. Check root directory.")
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
