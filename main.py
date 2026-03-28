@@ -1,163 +1,139 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional
-import uvicorn
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import os
+from flask import send_from_directory
 
-app = FastAPI(title="Phantom Load Auditor API")
+app = Flask(__name__)
+CORS(app)
 
-# Enable CORS (safe for dev)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Constants
+CO2_FACTOR = 0.82
+DAYS_YEAR = 365
 
-# Appliance Data
-APPLIANCE_CATALOG = {
-    "Smart TV": {"active_w": 100, "standby_w": 10},
-    "Set-Top Box": {"active_w": 25, "standby_w": 15},
-    "Gaming Console": {"active_w": 150, "standby_w": 15},
-    "Desktop Monitor": {"active_w": 40, "standby_w": 5},
-    "Phone Charger": {"active_w": 15, "standby_w": 1},
-    "Old Refrigerator": {"active_w": 400, "standby_w": 0},
-    "Microwave": {"active_w": 800, "standby_w": 3},
-    "Incandescent Bulb (60W)": {"active_w": 60, "standby_w": 0}
+# Approx wattage catalog (matching frontend devices)
+WATTAGE_MAP = {
+    "Smart TV": 100,
+    "Set-Top Box": 30,
+    "Gaming Console": 150,
+    "Desktop Monitor": 80,
+    "Phone Charger": 5,
+    "Old Refrigerator": 150,
+    "Microwave": 1200,
+    "Incandescent Bulb (60W)": 60
 }
 
-SWAP_DB = {
-    "Incandescent Bulb (60W)": {"suggestion": "9W LED", "new_active_w": 9, "new_standby_w": 0},
-    "Old Refrigerator": {"suggestion": "5-Star Inverter Fridge", "new_active_w": 150, "new_standby_w": 0},
-    "Smart TV": {"suggestion": "Disable 'Fast-Start' setting", "new_active_w": 100, "new_standby_w": 0}
-}
+# -------------------------------
+# HELPER FUNCTION
+# -------------------------------
+def calculate_device(device, rate):
+    watt = WATTAGE_MAP.get(device["name"], 100)
+    hours = device["active_hours_per_day"]
+    standby = device["stays_on_standby"]
 
-CO2_PER_KWH = 0.82
+    active_kwh_day = (watt * hours) / 1000
 
+    standby_hours = max(0, 24 - hours)
+    phantom_kwh_day = (5 * standby_hours) / 1000 if standby else 0
 
-# Models
-class UserAppliance(BaseModel):
-    id: str
-    room: str
-    name: str
-    is_custom: bool
-    custom_active_w: Optional[float] = 0
-    custom_standby_w: Optional[float] = 0
-    active_hours_per_day: float
-    stays_on_standby: bool
+    total_kwh_day = active_kwh_day + phantom_kwh_day
 
+    yearly_kwh = total_kwh_day * DAYS_YEAR
+    yearly_cost = yearly_kwh * rate
+    yearly_co2 = yearly_kwh * CO2_FACTOR
 
-class AuditRequest(BaseModel):
-    rate_per_kwh: float
-    appliances: List[UserAppliance]
+    phantom_cost = phantom_kwh_day * DAYS_YEAR * rate
 
+    return {
+        "name": device["name"],
+        "yearly_cost": round(yearly_cost, 2),
+        "yearly_co2": round(yearly_co2, 2),
+        "phantom_waste": round(phantom_cost, 2),
+        "watt": watt,
+        "hours": hours
+    }
 
-# 🔍 AUDIT API
-@app.post("/api/audit")
-def calculate_audit(req: AuditRequest):
-    results = []
-    totals = {"yearly_cost": 0, "yearly_co2": 0}
+# -------------------------------
+# AUDIT API
+# -------------------------------
+@app.route("/api/audit", methods=["POST"])
+def audit():
+    data = request.get_json()
+
+    rate = data.get("rate_per_kwh", 8)
+    devices = data.get("appliances", [])
+
+    all_data = [calculate_device(d, rate) for d in devices]
+
+    # Summary
+    total_cost = sum(d["yearly_cost"] for d in all_data)
+    total_co2 = sum(d["yearly_co2"] for d in all_data)
+
+    # Top offenders
+    top_offenders = sorted(all_data, key=lambda x: x["yearly_cost"], reverse=True)[:3]
+
+    # Recommendations
     recommendations = []
 
-    for item in req.appliances:
-        if item.name not in APPLIANCE_CATALOG:
-            raise HTTPException(status_code=400, detail=f"{item.name} not found")
-
-        specs = APPLIANCE_CATALOG[item.name]
-
-        act_w = specs["active_w"]
-        stb_w = specs["standby_w"]
-
-        standby_hours = max(0, 24 - item.active_hours_per_day) if item.stays_on_standby else 0
-
-        daily_kwh = ((act_w * item.active_hours_per_day) + (stb_w * standby_hours)) / 1000
-        yearly_kwh = daily_kwh * 365
-
-        yearly_cost = yearly_kwh * req.rate_per_kwh
-        yearly_co2 = yearly_kwh * CO2_PER_KWH
-
-        phantom_waste_cost = ((stb_w * standby_hours) / 1000) * 365 * req.rate_per_kwh
-        waste_score = yearly_cost + (yearly_co2 * 0.5) + (phantom_waste_cost * 2)
-
-        results.append({
-            "id": item.id,
-            "room": item.room,
-            "name": item.name,
-            "yearly_cost": round(yearly_cost, 2),
-            "phantom_waste": round(phantom_waste_cost, 2),
-            "waste_score": round(waste_score, 2)
+    if top_offenders:
+        top = top_offenders[0]
+        saving = (top["watt"] / 1000) * DAYS_YEAR * rate
+        recommendations.append({
+            "message": f"Reduce {top['name']} usage by 1 hour/day → Save ₹{round(saving,0)}/year"
         })
 
-        totals["yearly_cost"] += yearly_cost
-        totals["yearly_co2"] += yearly_co2
+    standby_devices = [d for d in all_data if d["phantom_waste"] > 0]
 
-        # Recommendations
-        if item.name in SWAP_DB:
-            swap = SWAP_DB[item.name]
+    if standby_devices:
+        standby_loss = sum(d["phantom_waste"] for d in standby_devices)
+        recommendations.append({
+            "message": f"Turn off standby devices → Save ₹{round(standby_loss,0)}/year"
+        })
 
-            new_kwh = ((swap["new_active_w"] * item.active_hours_per_day)) / 1000
-            new_cost = new_kwh * 365 * req.rate_per_kwh
-            new_co2 = new_kwh * 365 * CO2_PER_KWH
-
-            savings_rs = yearly_cost - new_cost
-            savings_co2 = yearly_co2 - new_co2
-
-            if savings_rs > 0:
-                recommendations.append({
-                    "message": f"Swap to {swap['suggestion']} to save ₹{int(savings_rs)}/yr and {int(savings_co2)} kg CO₂."
-                })
-
-    results.sort(key=lambda x: x["waste_score"], reverse=True)
-
-    return {
+    return jsonify({
         "summary": {
-            "yearly_cost": round(totals["yearly_cost"], 2),
-            "yearly_co2": round(totals["yearly_co2"], 2)
+            "yearly_cost": round(total_cost, 2),
+            "yearly_co2": round(total_co2, 2)
         },
-        "top_offenders": results[:3],
-        "recommendations": recommendations,
-        "all_data": results
-    }
+        "all_data": all_data,
+        "top_offenders": top_offenders,
+        "recommendations": recommendations
+    })
 
+# -------------------------------
+# SIMULATION API
+# -------------------------------
+@app.route("/api/simulate", methods=["POST"])
+def simulate():
+    rate = float(request.args.get("rate_per_kwh", 8))
+    device = request.get_json()
 
-# ⚡ SIMULATION API
-@app.post("/api/simulate")
-def run_simulation(req: UserAppliance, rate_per_kwh: float):
-    specs = APPLIANCE_CATALOG.get(req.name)
+    base = calculate_device(device, rate)
 
-    if not specs:
-        raise HTTPException(status_code=400, detail="Appliance not found")
+    # Reduce 1 hour scenario
+    reduced_device = device.copy()
+    reduced_device["active_hours_per_day"] = max(0, device["active_hours_per_day"] - 1)
 
-    act_w = specs["active_w"]
-    stb_w = specs["standby_w"]
+    new = calculate_device(reduced_device, rate)
 
-    current_kwh = ((act_w * req.active_hours_per_day) + (stb_w * (24 - req.active_hours_per_day))) / 1000
-    sim_kwh = ((act_w * req.active_hours_per_day)) / 1000
+    savings_rs = base["yearly_cost"] - new["yearly_cost"]
+    savings_co2 = base["yearly_co2"] - new["yearly_co2"]
 
-    current_cost = current_kwh * 365 * rate_per_kwh
-    sim_cost = sim_kwh * 365 * rate_per_kwh
+    return jsonify({
+        "scenario": f"Reducing {device['name']} by 1 hour/day",
+        "savings_rs": round(savings_rs, 2),
+        "savings_co2": round(savings_co2, 2)
+    })
 
-    saved_money = current_cost - sim_cost
-    saved_co2 = (current_kwh - sim_kwh) * 365 * CO2_PER_KWH
-
-    return {
-        "scenario": f"Unplugging your {req.name}",
-        "savings_rs": round(saved_money, 2),
-        "savings_co2": round(saved_co2, 2)
-    }
-
-
-# 🌐 Serve frontend
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-@app.get("/")
+# -------------------------------
+# ROOT
+# -------------------------------
+@app.route("/")
 def serve_frontend():
-    return FileResponse(os.path.join(BASE_DIR, "index.html"))
+    return send_from_directory(".", "index.html")
 
-
-# ▶ Run server
+# -------------------------------
+# RUN FOR RENDER
+# -------------------------------
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
