@@ -6,234 +6,234 @@
     <title>Phantom Load Auditor</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
+
 <body class="bg-gray-900 text-gray-100 min-h-screen p-6 font-sans">
 
-    <div class="max-w-5xl mx-auto space-y-6">
-        <header class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-emerald-400 mb-2">Phantom Load Auditor</h1>
-            <p class="text-gray-400">Track, rank, and eliminate household energy waste.</p>
-        </header>
+<div class="max-w-5xl mx-auto space-y-6">
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg col-span-1">
-                <h2 class="text-xl font-semibold mb-4 text-white">Add to Inventory</h2>
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm text-gray-400 mb-1">Room</label>
-                        <select id="room" onchange="updateApplianceDropdown()" class="w-full bg-gray-700 text-white rounded p-2 outline-none">
-                            <option value="Living Room">Living Room</option>
-                            <option value="Bedroom">Bedroom</option>
-                            <option value="Kitchen">Kitchen</option>
-                            <option value="Study">Study</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm text-gray-400 mb-1">Appliance</label>
-                        <select id="applianceName" onchange="updateDefaultHours()" class="w-full bg-gray-700 text-white rounded p-2 outline-none"></select>
-                    </div>
-                    <div>
-                        <label class="block text-sm text-gray-400 mb-1">Active Hours / Day</label>
-                        <input type="number" id="activeHours" step="0.5" class="w-full bg-gray-700 text-white rounded p-2 outline-none">
-                    </div>
-                    <div class="flex items-center space-x-2 mt-2">
-                        <input type="checkbox" id="standbyToggle" checked class="w-4 h-4 text-emerald-500 bg-gray-700 rounded border-gray-600 focus:ring-emerald-500">
-                        <label class="text-sm text-gray-400">Leaves device on standby</label>
-                    </div>
-                    <button onclick="addAppliance()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 rounded transition-colors mt-4">
-                        + Add Device
-                    </button>
-                </div>
-                
-                <hr class="border-gray-700 my-6">
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Global Electricity Rate (₹/kWh)</label>
-                    <input type="number" id="rate" value="8" class="w-full bg-gray-700 text-white rounded p-2 outline-none">
-                </div>
-                <button id="auditBtn" onclick="runAudit()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded transition-colors mt-4">
-                    Run Full Audit
-                </button>
-            </div>
+    <header class="text-center mb-8">
+        <h1 class="text-4xl font-bold text-emerald-400 mb-2">Phantom Load Auditor</h1>
+        <p class="text-gray-400">Track, rank, and eliminate household energy waste.</p>
+    </header>
 
-            <div class="col-span-1 lg:col-span-2 space-y-6">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                    <div class="bg-gray-800 border border-gray-700 p-4 rounded-xl shadow">
-                        <p class="text-xs text-gray-400 uppercase">Total Devices</p>
-                        <p class="text-2xl font-bold text-white mt-1" id="val-count">0</p>
-                    </div>
-                    <div class="bg-gray-800 border border-gray-700 p-4 rounded-xl shadow">
-                        <p class="text-xs text-gray-400 uppercase">Yearly Cost</p>
-                        <p class="text-2xl font-bold text-white mt-1" id="val-cost">₹0</p>
-                    </div>
-                    <div class="bg-gray-800 border border-red-900 p-4 rounded-xl shadow relative overflow-hidden">
-                        <div class="absolute inset-0 bg-red-500/5"></div>
-                        <p class="text-xs text-red-400 uppercase relative">Phantom Waste</p>
-                        <p class="text-2xl font-bold text-red-400 mt-1 relative" id="val-phantom">₹0</p>
-                    </div>
-                    <div class="bg-gray-800 border border-emerald-900 p-4 rounded-xl shadow relative overflow-hidden">
-                        <div class="absolute inset-0 bg-emerald-500/5"></div>
-                        <p class="text-xs text-emerald-400 uppercase relative">CO₂ Footprint</p>
-                        <p class="text-2xl font-bold text-emerald-400 mt-1 relative" id="val-co2">0 kg</p>
-                    </div>
-                </div>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-gray-800 border border-gray-700 p-5 rounded-xl">
-                        <h3 class="text-lg font-semibold text-white mb-3 flex items-center">
-                            <span class="bg-red-500/20 text-red-400 p-1 rounded mr-2">🔥</span> Worst Offenders
-                        </h3>
-                        <div id="offendersList" class="space-y-3">
-                            <p class="text-sm text-gray-500 italic">Run audit to see rankings...</p>
-                        </div>
-                    </div>
+        <!-- LEFT PANEL -->
+        <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-lg">
 
-                    <div class="bg-gray-800 border border-gray-700 p-5 rounded-xl">
-                        <h3 class="text-lg font-semibold text-white mb-3 flex items-center">
-                            <span class="bg-emerald-500/20 text-emerald-400 p-1 rounded mr-2">💡</span> Swap & Save
-                        </h3>
-                        <div id="swapsList" class="space-y-3">
-                            <p class="text-sm text-gray-500 italic">No recommendations yet...</p>
-                        </div>
-                    </div>
-                </div>
+            <h2 class="text-xl font-semibold mb-4">Add Appliance</h2>
 
-                <div class="bg-gray-800 border border-gray-700 p-5 rounded-xl flex items-center justify-between">
-                    <div>
-                        <h3 class="text-lg font-semibold text-blue-400 mb-1">What-If Simulator</h3>
-                        <p class="text-sm text-gray-400">Select an appliance to see the impact of unplugging it.</p>
-                        <select id="simSelect" class="mt-2 bg-gray-700 text-white rounded p-1 text-sm outline-none w-48"></select>
-                    </div>
-                    <button id="simBtn" onclick="runSimulation()" class="bg-blue-500/20 text-blue-400 hover:bg-blue-500/40 px-4 py-2 rounded font-semibold transition-colors">
-                        Simulate
-                    </button>
-                </div>
-            </div>
+            <select id="room" onchange="updateApplianceDropdown()" class="w-full p-2 bg-gray-700 rounded mb-3">
+                <option>Living Room</option>
+                <option>Bedroom</option>
+                <option>Kitchen</option>
+                <option>Study</option>
+            </select>
+
+            <select id="applianceName" onchange="updateDefaultHours()" class="w-full p-2 bg-gray-700 rounded mb-3"></select>
+
+            <input id="activeHours" type="number" placeholder="Hours/day" class="w-full p-2 bg-gray-700 rounded mb-3">
+
+            <label class="flex items-center space-x-2 mb-3">
+                <input type="checkbox" id="standbyToggle" checked>
+                <span>Leaves on standby</span>
+            </label>
+
+            <button onclick="addAppliance()" class="w-full bg-emerald-500 p-2 rounded">+ Add Device</button>
+
+            <hr class="my-4 border-gray-600">
+
+            <input id="rate" type="number" value="8" class="w-full p-2 bg-gray-700 rounded mb-3">
+
+            <button onclick="runAudit()" class="w-full bg-blue-500 p-3 rounded">Run Audit</button>
         </div>
+
+        <!-- RIGHT PANEL -->
+        <div class="lg:col-span-2 space-y-6">
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div class="bg-gray-800 p-4 rounded">
+                    <p>Total Devices</p>
+                    <p id="val-count">0</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded">
+                    <p>Yearly Cost</p>
+                    <p id="val-cost">₹0</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded">
+                    <p>Phantom Waste</p>
+                    <p id="val-phantom">₹0</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded">
+                    <p>CO₂</p>
+                    <p id="val-co2">0</p>
+                </div>
+            </div>
+
+            <div id="offendersList" class="bg-gray-800 p-4 rounded">
+                <p>Run audit to see results</p>
+            </div>
+
+            <div id="swapsList" class="bg-gray-800 p-4 rounded">
+                <p>No recommendations yet</p>
+            </div>
+
+            <div class="bg-gray-800 p-4 rounded">
+                <select id="simSelect" class="bg-gray-700 p-2 rounded"></select>
+                <button onclick="runSimulation()" class="bg-blue-500 p-2 rounded ml-2">Simulate</button>
+            </div>
+
+        </div>
+
     </div>
+</div>
 
-    <script>
-        const catalogMap = {
-            "Living Room": ["Smart TV", "Set-Top Box", "Gaming Console"],
-            "Study": ["Desktop Monitor", "Phone Charger"],
-            "Kitchen": ["Old Refrigerator", "Microwave"],
-            "Bedroom": ["Incandescent Bulb (60W)"]
-        };
+<script>
 
-        const defaultHoursMap = {
-            "Smart TV": 4, "Set-Top Box": 4, "Gaming Console": 2, "Desktop Monitor": 6,
-            "Phone Charger": 2, "Old Refrigerator": 24, "Microwave": 0.5, "Incandescent Bulb (60W)": 5
-        };
+const catalogMap = {
+    "Living Room": ["Smart TV", "Set-Top Box", "Gaming Console"],
+    "Study": ["Desktop Monitor", "Phone Charger"],
+    "Kitchen": ["Old Refrigerator", "Microwave"],
+    "Bedroom": ["Incandescent Bulb (60W)"]
+};
 
-        function updateApplianceDropdown() {
-            const room = document.getElementById('room').value;
-            const applianceSelect = document.getElementById('applianceName');
-            applianceSelect.innerHTML = '';
-            (catalogMap[room] || []).forEach(app => {
-                const option = document.createElement('option');
-                option.value = app; option.text = app;
-                applianceSelect.appendChild(option);
-            });
-            updateDefaultHours();
-        }
+const defaultHoursMap = {
+    "Smart TV": 4, "Set-Top Box": 4, "Gaming Console": 2,
+    "Desktop Monitor": 6, "Phone Charger": 2,
+    "Old Refrigerator": 24, "Microwave": 1,
+    "Incandescent Bulb (60W)": 5
+};
 
-        function updateDefaultHours() {
-            const appliance = document.getElementById('applianceName').value;
-            const hoursInput = document.getElementById('activeHours');
-            if (defaultHoursMap[appliance] !== undefined) hoursInput.value = defaultHoursMap[appliance];
-        }
+let myInventory = [];
 
-        document.addEventListener('DOMContentLoaded', updateApplianceDropdown);
+// Dropdown setup
+function updateApplianceDropdown() {
+    const room = document.getElementById('room').value;
+    const dropdown = document.getElementById('applianceName');
 
-        let myInventory = [];
+    dropdown.innerHTML = '';
 
-        function addAppliance() {
-            const room = document.getElementById('room').value;
-            const name = document.getElementById('applianceName').value;
-            const hours = parseFloat(document.getElementById('activeHours').value);
-            const standby = document.getElementById('standbyToggle').checked;
-            
-            const device = { id: Date.now().toString(), room, name, is_custom: false, active_hours_per_day: hours, stays_on_standby: standby };
-            myInventory.push(device);
-            
-            const simSelect = document.getElementById('simSelect');
-            const option = document.createElement('option');
-            option.value = device.id; option.text = `${name} (${room})`;
-            simSelect.appendChild(option);
-            
-            document.getElementById('val-count').innerText = myInventory.length;
-        }
+    catalogMap[room].forEach(app => {
+        let opt = document.createElement('option');
+        opt.value = app;
+        opt.text = app;
+        dropdown.appendChild(opt);
+    });
 
-        async function runAudit() {
-            if(myInventory.length === 0) return alert("Please add appliances to your inventory.");
-            const btn = document.getElementById('auditBtn');
-            const originalText = btn.innerText;
-            btn.innerText = "Processing...";
-            
-            const rate = parseFloat(document.getElementById('rate').value);
-            
-            try {
-                const response = await fetch('/api/audit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ rate_per_kwh: rate, appliances: myInventory })
-                });
-                
-                if (!response.ok) throw new Error();
-                const data = await response.json();
-                
-                document.getElementById('val-cost').innerText = `₹${data.summary.yearly_cost}`;
-                document.getElementById('val-co2').innerText = `${data.summary.yearly_co2} kg`;
-                const totalPhantom = data.all_data.reduce((sum, item) => sum + item.phantom_waste, 0);
-                document.getElementById('val-phantom').innerText = `₹${totalPhantom.toFixed(2)}`;
+    updateDefaultHours();
+}
 
-                const offList = document.getElementById('offendersList');
-                offList.innerHTML = '';
-                data.top_offenders.forEach((o, index) => {
-                    offList.innerHTML += `
-                        <div class="bg-gray-700 p-3 rounded flex justify-between items-center border-l-4 ${index === 0 ? 'border-red-500' : 'border-orange-400'}">
-                            <div><p class="font-semibold text-gray-200 text-sm">${o.name}</p><p class="text-xs text-gray-400">${o.room}</p></div>
-                            <div class="text-right"><p class="text-red-400 text-sm font-bold">Waste Score: ${o.waste_score}</p><p class="text-xs text-gray-400">₹${o.yearly_cost}/yr</p></div>
-                        </div>`;
-                });
+function updateDefaultHours() {
+    const appliance = document.getElementById('applianceName').value;
+    document.getElementById('activeHours').value = defaultHoursMap[appliance] || 1;
+}
 
-                const swapList = document.getElementById('swapsList');
-                swapList.innerHTML = data.recommendations.length === 0 ? '<p class="text-sm text-gray-500 italic">Highly efficient!</p>' : '';
-                data.recommendations.forEach(r => {
-                    swapList.innerHTML += `<div class="bg-gray-700 p-3 rounded border-l-4 border-emerald-500"><p class="text-sm text-gray-200">${r.message}</p></div>`;
-                });
-            } catch (err) {
-                alert("Audit Error: Check Render Logs. Ensure main.py is running.");
-            } finally {
-                btn.innerText = originalText;
-            }
-        }
+document.addEventListener("DOMContentLoaded", updateApplianceDropdown);
 
-        async function runSimulation() {
-            const id = document.getElementById('simSelect').value;
-            if(!id) return alert("Select a device.");
-            const btn = document.getElementById('simBtn');
-            btn.innerText = "...";
-            
-            const device = myInventory.find(d => d.id === id);
-            const rate = parseFloat(document.getElementById('rate').value);
+// Add device
+function addAppliance() {
 
-            try {
-                // FIXED: Using Backticks (`) for template literals so ${rate} works!
-                const response = await fetch(`/api/simulate?rate_per_kwh=${rate}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(device)
-                });
-                
-                if (!response.ok) throw new Error();
-                const res = await response.json();
-                alert(`${res.scenario}\n\nSavings: ₹${res.savings_rs}/yr | ${res.savings_co2}kg CO2`);
-            } catch (err) {
-                alert("Simulation Failed.");
-            } finally {
-                btn.innerText = "Simulate";
-            }
-        }
-    </script>
+    const hours = parseFloat(document.getElementById('activeHours').value);
+
+    if (isNaN(hours)) {
+        alert("Enter valid hours");
+        return;
+    }
+
+    const device = {
+        id: Date.now().toString(),
+        room: document.getElementById('room').value,
+        name: document.getElementById('applianceName').value,
+        is_custom: false,
+        active_hours_per_day: hours,
+        stays_on_standby: document.getElementById('standbyToggle').checked
+    };
+
+    myInventory.push(device);
+
+    document.getElementById('val-count').innerText = myInventory.length;
+
+    let opt = document.createElement('option');
+    opt.value = device.id;
+    opt.text = `${device.name} (${device.room})`;
+
+    document.getElementById('simSelect').appendChild(opt);
+}
+
+// Run audit
+async function runAudit() {
+
+    if (myInventory.length === 0) {
+        alert("Add devices first");
+        return;
+    }
+
+    const rate = parseFloat(document.getElementById('rate').value) || 8;
+
+    try {
+        const res = await fetch('/api/audit', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({rate_per_kwh: rate, appliances: myInventory})
+        });
+
+        const data = await res.json();
+
+        document.getElementById('val-cost').innerText = `₹${data.summary.yearly_cost}`;
+        document.getElementById('val-co2').innerText = `${data.summary.yearly_co2} kg`;
+
+        let phantom = data.all_data.reduce((s, x) => s + x.phantom_waste, 0);
+        document.getElementById('val-phantom').innerText = `₹${phantom.toFixed(2)}`;
+
+        let off = document.getElementById('offendersList');
+        off.innerHTML = '';
+
+        data.top_offenders.forEach(o => {
+            off.innerHTML += `<p>${o.name} - ₹${o.yearly_cost}</p>`;
+        });
+
+        let swap = document.getElementById('swapsList');
+        swap.innerHTML = '';
+
+        data.recommendations.forEach(r => {
+            swap.innerHTML += `<p>${r.message}</p>`;
+        });
+
+    } catch (err) {
+        alert("Backend not running or error occurred");
+    }
+}
+
+// Simulation
+async function runSimulation() {
+
+    const id = document.getElementById('simSelect').value;
+
+    if (!id) {
+        alert("Select device");
+        return;
+    }
+
+    const device = myInventory.find(d => d.id === id);
+    const rate = parseFloat(document.getElementById('rate').value) || 8;
+
+    try {
+        const res = await fetch(`/api/simulate?rate_per_kwh=${rate}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(device)
+        });
+
+        const data = await res.json();
+
+        alert(`${data.scenario}\nSavings: ₹${data.savings_rs} | ${data.savings_co2} kg CO₂`);
+
+    } catch {
+        alert("Simulation failed");
+    }
+}
+
+</script>
+
 </body>
 </html>

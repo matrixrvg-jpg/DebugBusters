@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
@@ -7,7 +8,16 @@ import os
 
 app = FastAPI(title="Phantom Load Auditor API")
 
-# 1. THE DATA SET
+# Enable CORS (safe for dev)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Appliance Data
 APPLIANCE_CATALOG = {
     "Smart TV": {"active_w": 100, "standby_w": 10},
     "Set-Top Box": {"active_w": 25, "standby_w": 15},
@@ -25,9 +35,10 @@ SWAP_DB = {
     "Smart TV": {"suggestion": "Disable 'Fast-Start' setting", "new_active_w": 100, "new_standby_w": 0}
 }
 
-CO2_PER_KWH = 0.82 
+CO2_PER_KWH = 0.82
 
-# 2. DATA MODELS
+
+# Models
 class UserAppliance(BaseModel):
     id: str
     room: str
@@ -38,11 +49,13 @@ class UserAppliance(BaseModel):
     active_hours_per_day: float
     stays_on_standby: bool
 
+
 class AuditRequest(BaseModel):
     rate_per_kwh: float
     appliances: List[UserAppliance]
 
-# 3. ENDPOINTS
+
+# 🔍 AUDIT API
 @app.post("/api/audit")
 def calculate_audit(req: AuditRequest):
     results = []
@@ -51,20 +64,22 @@ def calculate_audit(req: AuditRequest):
 
     for item in req.appliances:
         if item.name not in APPLIANCE_CATALOG:
-            continue
-            
+            raise HTTPException(status_code=400, detail=f"{item.name} not found")
+
         specs = APPLIANCE_CATALOG[item.name]
+
         act_w = specs["active_w"]
         stb_w = specs["standby_w"]
 
         standby_hours = max(0, 24 - item.active_hours_per_day) if item.stays_on_standby else 0
+
         daily_kwh = ((act_w * item.active_hours_per_day) + (stb_w * standby_hours)) / 1000
         yearly_kwh = daily_kwh * 365
-        
+
         yearly_cost = yearly_kwh * req.rate_per_kwh
         yearly_co2 = yearly_kwh * CO2_PER_KWH
-        phantom_waste_cost = ((stb_w * standby_hours) / 1000) * 365 * req.rate_per_kwh
 
+        phantom_waste_cost = ((stb_w * standby_hours) / 1000) * 365 * req.rate_per_kwh
         waste_score = yearly_cost + (yearly_co2 * 0.5) + (phantom_waste_cost * 2)
 
         results.append({
@@ -79,61 +94,70 @@ def calculate_audit(req: AuditRequest):
         totals["yearly_cost"] += yearly_cost
         totals["yearly_co2"] += yearly_co2
 
+        # Recommendations
         if item.name in SWAP_DB:
             swap = SWAP_DB[item.name]
-            new_kwh = ((swap["new_active_w"] * item.active_hours_per_day) + (swap["new_standby_w"] * standby_hours)) / 1000
-            new_cost = (new_kwh * 365) * req.rate_per_kwh
-            new_co2 = (new_kwh * 365) * CO2_PER_KWH
-            
+
+            new_kwh = ((swap["new_active_w"] * item.active_hours_per_day)) / 1000
+            new_cost = new_kwh * 365 * req.rate_per_kwh
+            new_co2 = new_kwh * 365 * CO2_PER_KWH
+
             savings_rs = yearly_cost - new_cost
             savings_co2 = yearly_co2 - new_co2
-            
+
             if savings_rs > 0:
                 recommendations.append({
-                    "appliance": item.name,
-                    "room": item.room,
                     "message": f"Swap to {swap['suggestion']} to save ₹{int(savings_rs)}/yr and {int(savings_co2)} kg CO₂."
                 })
 
     results.sort(key=lambda x: x["waste_score"], reverse=True)
 
     return {
-        "summary": {k: round(v, 2) for k, v in totals.items()},
+        "summary": {
+            "yearly_cost": round(totals["yearly_cost"], 2),
+            "yearly_co2": round(totals["yearly_co2"], 2)
+        },
         "top_offenders": results[:3],
         "recommendations": recommendations,
         "all_data": results
     }
 
-@app.post("/api/simulate")
-def run_what_if(req: UserAppliance, rate_per_kwh: float):
-    act_w = APPLIANCE_CATALOG.get(req.name, {}).get("active_w", 0)
-    stb_w = APPLIANCE_CATALOG.get(req.name, {}).get("standby_w", 0)
-    
-    current_kwh = ((act_w * req.active_hours_per_day) + (stb_w * (24 - req.active_hours_per_day))) / 1000
-    current_cost = current_kwh * 365 * rate_per_kwh
 
-    sim_kwh = ((act_w * req.active_hours_per_day) + 0) / 1000
+# ⚡ SIMULATION API
+@app.post("/api/simulate")
+def run_simulation(req: UserAppliance, rate_per_kwh: float):
+    specs = APPLIANCE_CATALOG.get(req.name)
+
+    if not specs:
+        raise HTTPException(status_code=400, detail="Appliance not found")
+
+    act_w = specs["active_w"]
+    stb_w = specs["standby_w"]
+
+    current_kwh = ((act_w * req.active_hours_per_day) + (stb_w * (24 - req.active_hours_per_day))) / 1000
+    sim_kwh = ((act_w * req.active_hours_per_day)) / 1000
+
+    current_cost = current_kwh * 365 * rate_per_kwh
     sim_cost = sim_kwh * 365 * rate_per_kwh
-    
+
     saved_money = current_cost - sim_cost
     saved_co2 = (current_kwh - sim_kwh) * 365 * CO2_PER_KWH
 
     return {
-        "scenario": f"Unplugging your {req.name} when not in use.",
+        "scenario": f"Unplugging your {req.name}",
         "savings_rs": round(saved_money, 2),
         "savings_co2": round(saved_co2, 2)
     }
 
-# --- THE FIX ---
+
+# 🌐 Serve frontend
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @app.get("/")
-async def read_index():
-    index_path = os.path.join(BASE_DIR, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    # If the file is missing, this tells you why in the browser
-    raise HTTPException(status_code=404, detail=f"index.html not found. Check root directory.")
+def serve_frontend():
+    return FileResponse(os.path.join(BASE_DIR, "index.html"))
 
+
+# ▶ Run server
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
